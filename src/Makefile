@@ -1,8 +1,8 @@
 raw_kaggle_dataset_filename = '../../games.csv'
-num_input_boards = 10
+num_input_games = 10
 epochs = 10
-board_output_filename = '../../boards_$(num_input_boards)in.hdf5'
-trained_model_output_filename = '../trained/model_$(num_input_boards)in.hdf5'
+board_dataset_output_filename = '../../boards_$(num_input_games)in.hdf5'
+trained_model_output_filename = '../trained/model_$(num_input_games)in.hdf5'
 
 
 all: help run
@@ -18,12 +18,12 @@ help:
 
 
 dataset:
-	@echo "Making a C source dataset and saving to $(c_source_output_filename)"
-	python build_dataset.py $(raw_source_filename) $(c_source_output_filename) -m $(num_input_functions) -a $(num_augmented_functions) -O $(optimization_level)
+	@echo "Making a boards dataset and saving to $(board_dataset_output_filename)"
+	#python build_dataset.py $(raw_kaggle_dataset_filename) $(board_dataset_output_filename) -n $(num_input_games)
 
 
 train:
-	@echo "Training the VAE on the dataset from $(c_production_rules_output_filename) and saving to $(trained_vae_output_filename)"
+	@echo "Training a model on the dataset from $(board_dataset_output_filename) and saving to $(trained_model_output_filename)"
 	@echo "Make sure that you have adjusted the hyperparameters to your satisfaction."
 	#python model/train_model.py
 
