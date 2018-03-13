@@ -89,8 +89,6 @@ def make_dataset(csv_filename, output_filename, num_games=None):
         game_boards = game_boards[SKIP_FIRST_N_MOVES:]
         end = min(MAX_NUM_BOARDS - board_dataset.shape[0], len(game_boards))
         for i in range(end):
-            print game_boards[i]
-            print '=' * 80
             board_vectors = get_vectors(game_boards[i])
             board_dataset.resize((board_dataset.shape[0] + 1, board_dataset.shape[1], board_dataset.shape[2]))
             board_dataset[-1, :, :] = board_vectors 
