@@ -9,7 +9,7 @@ DEFAULT_BOARD_DATASET_NAME = 'boards'
 DEFAULT_LABEL_DATASET_NAME = 'labels'
 BOARD_SIZE = 64
 ONE_HOT_VECTOR_SIZE = 13
-MAX_NUM_BOARDS = 10 # TODO increase this.
+MAX_NUM_MOVES_PER_GAME = 75
 NUM_LABELS = 3
 WHITE_WIN_LABEL = [1, 0, 0]
 BLACK_WIN_LABEL = [0, 1, 0]
@@ -56,22 +56,20 @@ def get_label(winner):
         raise ValueError('Unrecognized winner string: {0}'.format(winner))
 
 
-def make_dataset(csv_filename, output_filename, num_games=None):
+def make_dataset(csv_filename, output_filename, num_boards=None):
     """Builds the compiled dataset and saves it to output_filename.
     The output file will be an h5 file that contains the one-hot
     vectors to be used in training. If num_games is None, then this
     function will process all games in the dataset."""
-    outfile = h5py.File(output_filename, 'w')
-    board_dataset = outfile.create_dataset(DEFAULT_BOARD_DATASET_NAME, (0, BOARD_SIZE, ONE_HOT_VECTOR_SIZE), maxshape=(MAX_NUM_BOARDS, BOARD_SIZE, ONE_HOT_VECTOR_SIZE), chunks=True, dtype='i1')
-    label_dataset = outfile.create_dataset(DEFAULT_LABEL_DATASET_NAME, (0, NUM_LABELS), maxshape=(MAX_NUM_BOARDS, NUM_LABELS), chunks=True, dtype='i1')
     games = pandas.read_csv(csv_filename)
     dataset_winners = games[WINNER_KEY]
     dataset_moves = games[MOVES_KEY]
-    if num_games:
-        dataset_winners = dataset_winners[:num_games]
-        dataset_moves = dataset_moves[:num_games]
+    max_num_boards = num_boards if num_boards else len(dataset_winners) * MAX_NUM_MOVES_PER_GAME
+    outfile = h5py.File(output_filename, 'w')
+    board_dataset = outfile.create_dataset(DEFAULT_BOARD_DATASET_NAME, (0, BOARD_SIZE, ONE_HOT_VECTOR_SIZE), maxshape=(max_num_boards, BOARD_SIZE, ONE_HOT_VECTOR_SIZE), chunks=True, dtype='i1')
+    label_dataset = outfile.create_dataset(DEFAULT_LABEL_DATASET_NAME, (0, NUM_LABELS), maxshape=(max_num_boards, NUM_LABELS), chunks=True, dtype='i1')
     for i in range(len(dataset_winners)):
-        if label_dataset.shape[0] >= MAX_NUM_BOARDS:
+        if label_dataset.shape[0] >= max_num_boards:
             break
         # Get label.
         label = get_label(dataset_winners[i])
@@ -87,7 +85,7 @@ def make_dataset(csv_filename, output_filename, num_games=None):
         game_boards = game_boards[::2]
         # Skip the first few boards.
         game_boards = game_boards[SKIP_FIRST_N_MOVES:]
-        end = min(MAX_NUM_BOARDS - board_dataset.shape[0], len(game_boards))
+        end = min(max_num_boards - board_dataset.shape[0], len(game_boards))
         for i in range(end):
             board_vectors = get_vectors(game_boards[i])
             board_dataset.resize((board_dataset.shape[0] + 1, board_dataset.shape[1], board_dataset.shape[2]))
@@ -103,8 +101,8 @@ if __name__ == '__main__':
         help='The name of the CSV games file to use (if using the Kaggle dataset, this should be the path to games.csv).')
     parser.add_argument('output_filename', metavar='o', type=str,
         help='The name of the h5 file at which to save the compiled dataset.')
-    parser.add_argument('-n', '--num_games', metavar='n', type=int, default=None,
-        help='The maximum number of games to process. By default, processes all functions in the file.')
+    parser.add_argument('-n', '--num_boards', metavar='n', type=int, default=None,
+        help='The maximum number of boards to process. By default, processes all boards in the file.')
     args = parser.parse_args()
-    make_dataset(args.csv_filename, args.output_filename, num_games=args.num_games)
+    make_dataset(args.csv_filename, args.output_filename, num_boards=args.num_boards)
 

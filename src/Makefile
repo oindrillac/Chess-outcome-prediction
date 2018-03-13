@@ -1,8 +1,9 @@
 raw_kaggle_dataset_filename = '../../games.csv'
-num_input_games = 10
+max_num_boards = 601253
+num_input_boards = 100
 epochs = 10
-board_dataset_output_filename = '../../boards_$(num_input_games)in.hdf5'
-trained_model_output_filename = '../trained/model_$(num_input_games)in.hdf5'
+board_dataset_output_filename = '../../boards_$(num_input_boards)in.hdf5'
+trained_model_output_filename = '../trained/model_$(num_input_boards)in.hdf5'
 
 
 all: help run
@@ -19,7 +20,7 @@ help:
 
 dataset:
 	@echo "Making a boards dataset and saving to $(board_dataset_output_filename)"
-	#python build_dataset.py $(raw_kaggle_dataset_filename) $(board_dataset_output_filename) -n $(num_input_games)
+	python build_dataset.py $(raw_kaggle_dataset_filename) $(board_dataset_output_filename) -n $(num_input_boards)
 
 
 train:
