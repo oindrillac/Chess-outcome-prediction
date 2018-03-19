@@ -1,4 +1,5 @@
 import argparse
+import train_mnist
 
 MNIST_MODEL_NUM = 0
 
@@ -7,8 +8,7 @@ def train_model(model_num, dataset_filename, output_filename):
     """Trains a model using the given dataset and saves it to the
     output file. Model numbers are defined above as constants."""
     if model_num == MNIST_MODEL_NUM:
-        # TODO call MNIST model.
-        pass
+        train_mnist.train_model(dataset_filename, output_filename)
     else:
         raise ValueError('Unrecognized model number: {0}'.format(model_num))
 
