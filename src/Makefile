@@ -1,10 +1,11 @@
-raw_kaggle_dataset_filename = '../../games.csv'
+raw_kaggle_dataset_filename = ../../games.csv
 max_num_boards = 601253
-num_input_boards = 100
+#num_input_boards = 100
+num_input_boards = $(max_num_boards)
 model_type = 0
 epochs = 10
-board_dataset_output_filename = '../../boards_$(num_input_boards)in.hdf5'
-trained_model_output_filename = '../trained/model_$(num_input_boards)in.hdf5'
+board_dataset_output_filename = ../../boards_$(num_input_boards)in.hdf5
+trained_model_output_filename = ../trained/model_$(num_input_boards)in.hdf5
 
 
 all: help run
