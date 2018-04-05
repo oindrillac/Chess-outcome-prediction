@@ -13,18 +13,15 @@ import build_dataset
 
 tf.logging.set_verbosity(tf.logging.INFO)
 
+DEFAULT_BATCH_SIZE = 100
+DEFAULT_NUM_EPOCHS = 5
+TRAINING_SPLIT = 0.8
+
 
 def cnn_model_fn(features, labels, mode):
     """Model function for CNN. Adapted from TF MNIST tutorial."""
     # Convert 13 dimensional one-hot vector into a flat value (just use the index as "pixel" value). Then we can go directly off the example.
     features_flat = features['x']
-    #features_flat = np.zeros((len(features_onehot), len(features_onehot[0])), dtype=np.int32)
-    #features_flat = np.zeros(features_onehot.shape, dtype=np.int32)
-    #for example_number in range(len(features_onehot)):
-    #    for board_position in range(len(features_onehot[example_number])):
-    #        flat_value = features_onehot[example_number][board_position].index(1)
-    #        features_flat[example_number][board_position] = flat_value
-
     # Input Layer.
     # Input is batch_size x 8 x 8 x 1, where each element is in [0, 12].
     input_layer = tf.reshape(features_flat, [-1, build_dataset.BOARD_ROWS, build_dataset.BOARD_COLS, 1])
@@ -99,15 +96,16 @@ def cnn_model_fn(features, labels, mode):
 
 def main(argv):
     """Trains the model using the given argv."""
-    if len(argv) != 3:
-        raise ValueError('Expected 3 arguments; got {0}.'.format(len(argv)))
+    if len(argv) != 5:
+        raise ValueError('Expected 5 arguments; got {0}.'.format(len(argv)))
     dataset_filename = argv[1]
     output_filename = argv[2]
+    batch_size = DEFAULT_BATCH_SIZE if not argv[3] else int(argv[3])
+    num_epochs = DEFAULT_NUM_EPOCHS if not argv[4] else int(argv[4])
     # Load training and eval data.
     infile = h5py.File(dataset_filename, 'r')
     boards = np.asarray(infile[build_dataset.DEFAULT_BOARD_DATASET_NAME])
     labels = np.asarray(infile[build_dataset.DEFAULT_LABEL_DATASET_NAME])
-
     # Change boards and labels from one hot encoding to flat encoding.
     boards_flat = np.zeros((boards.shape[0], boards.shape[1]), dtype=np.float32)
     for example_number in range(len(boards)):
@@ -119,31 +117,28 @@ def main(argv):
         flat_value = np.where(labels[example_number] == 1)[0][0]
         labels_flat[example_number] = flat_value
 
-    split_index = int(len(boards) * 0.8)
+    split_index = int(len(boards) * TRAINING_SPLIT)
     boards_train = boards_flat[:split_index]
     labels_train = labels_flat[:split_index]
     boards_eval = boards_flat[split_index:]
     labels_eval = labels_flat[split_index:]
     # Create the Estimator.
     mnist_classifier = tf.estimator.Estimator(model_fn=cnn_model_fn, model_dir='/tmp/mnist_convnet_model')
-
     # Set up logging for predictions.
     # Log the values in the 'Softmax' tensor with label 'probabilities'.
     tensors_to_log = {'probabilities': 'softmax_tensor'}
     logging_hook = tf.train.LoggingTensorHook(
         tensors=tensors_to_log, every_n_iter=50)
-
     # Train the model.
     train_input_fn = tf.estimator.inputs.numpy_input_fn(
         x={'x': boards_train},
         y=labels_train,
-        batch_size=100,
-        num_epochs=5,
+        batch_size=batch_size,
+        num_epochs=num_epochs,
         shuffle=True)
     mnist_classifier.train(
         input_fn=train_input_fn,
         hooks=[logging_hook])
-
     # Evaluate the model and print results.
     eval_input_fn = tf.estimator.inputs.numpy_input_fn(
         x={'x': boards_eval},
@@ -158,10 +153,10 @@ def main(argv):
     infile.close()
 
 
-def train_model(dataset_filename, output_filename):
+def train_model(dataset_filename, output_filename, batch_size='', num_epochs=''):
     """Trains a model using the given dataset and saves it to the
     output file."""
-    tf.app.run(main=main, argv=[sys.argv[0]] + [dataset_filename, output_filename])
+    tf.app.run(main=main, argv=[sys.argv[0]] + [dataset_filename, output_filename, batch_size, num_epochs])
 
 
 if __name__ == '__main__':
