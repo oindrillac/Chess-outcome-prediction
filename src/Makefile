@@ -4,9 +4,10 @@ max_num_boards = 601253
 num_input_boards = $(max_num_boards)
 model_type = 0
 batch_size = 100
-num_epochs = 5
+num_epochs = 1
 board_dataset_output_filename = ../../boards_$(num_input_boards)in.hdf5
 trained_model_output_filename = ../trained/model_$(num_input_boards)in.hdf5
+trained_model_output_dir = /tmp/mnist_convnet_model/
 
 
 all: help run
@@ -38,5 +39,5 @@ run:
 
 
 clean:
-	@echo "Removing trained model file."
-	#rm ../trained/$(trained_model_output_filenam)
+	@echo "Removing trained model files."
+	rm -rf $(trained_model_output_dir)

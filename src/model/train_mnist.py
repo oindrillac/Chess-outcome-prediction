@@ -11,11 +11,27 @@ sys.path.extend(['.', '..'])
 
 import build_dataset
 
-tf.logging.set_verbosity(tf.logging.INFO)
-
+DEFAULT_MODEL_DIR = '/tmp/mnist_convnet_model'
+# For logging and summaries.
+LOG_EVERY_N_ITER = 50
 DEFAULT_BATCH_SIZE = 100
 DEFAULT_NUM_EPOCHS = 5
 TRAINING_SPLIT = 0.8
+LEARNING_RATE = 0.001
+# If True, this will change the one-hot index values to be more analogous to a pixel value.
+MODIFY_ONE_HOT_INDICES = True
+
+tf.logging.set_verbosity(tf.logging.INFO)
+
+
+def convert_index_value(i):
+    """Returns a new one-hot index that more closely matches a pixel
+    representation of the label. Empty space is mapped to the middle
+    value, and on either sides piece indices are reflected with the
+    highest values furthest from center."""
+    piece = build_dataset.ONE_HOT_INDICES[i]
+    result_indices = ['K', 'Q', 'R', 'B', 'N', 'P', None, 'p', 'n', 'b', 'r', 'q', 'k']
+    return result_indices.index(piece)
 
 
 def cnn_model_fn(features, labels, mode):
@@ -25,6 +41,7 @@ def cnn_model_fn(features, labels, mode):
     # Input Layer.
     # Input is batch_size x 8 x 8 x 1, where each element is in [0, 12].
     input_layer = tf.reshape(features_flat, [-1, build_dataset.BOARD_ROWS, build_dataset.BOARD_COLS, 1])
+    tf.summary.image('First_Boards_In_Batch', input_layer, 10)
 
     # Convolutional Layer #1.
     # Output is batch_size x 8 x 8 x 32.
@@ -34,10 +51,12 @@ def cnn_model_fn(features, labels, mode):
         kernel_size=[5, 5],
         padding='same',
         activation=tf.nn.relu)
+    tf.summary.histogram('Conv1', conv1)
 
     # Pooling Layer #1.
     # Output is batch_size x 4 x 4 x 32.
     pool1 = tf.layers.max_pooling2d(inputs=conv1, pool_size=[2, 2], strides=2)
+    tf.summary.histogram('Pool1', pool1)
 
     # Convolutional Layer #2.
     # Output is batch_size x 4 x 4 x 64.
@@ -47,19 +66,23 @@ def cnn_model_fn(features, labels, mode):
         kernel_size=[3, 3],
         padding='same',
         activation=tf.nn.relu)
+    tf.summary.histogram('Conv2', conv2)
 
     # Pooling Layer #2.
     # Output is batch_size x 2 x 2 x 64.
     pool2 = tf.layers.max_pooling2d(inputs=conv2, pool_size=[2, 2], strides=2)
+    tf.summary.histogram('Pool2', pool2)
 
     # Dense Layer.
     # Output is batch_size x 256.
     pool2_flat = tf.reshape(pool2, [-1, 2 * 2 * 64])
     dense = tf.layers.dense(inputs=pool2_flat, units=256, activation=tf.nn.relu)
+    tf.summary.histogram('Dense', dense)
     dropout = tf.layers.dropout(
         inputs=dense,
         rate=0.4,
         training=mode == tf.estimator.ModeKeys.TRAIN)
+    tf.summary.histogram('Dropout', dropout)
 
     # Logits Layer.
     # Output is batch_size x 3.
@@ -69,27 +92,31 @@ def cnn_model_fn(features, labels, mode):
         # Generate predictions (for PREDICT and EVAL mode).
         'classes': tf.argmax(input=logits, axis=1),
         # Add softmax_tensor to the graph. It is used for PREDICT and by the logging_hook.
-        'probabilities': tf.nn.softmax(logits, name="softmax_tensor")
+        'probabilities': tf.nn.softmax(logits, name='softmax_tensor')
     }
-
+    
     if mode == tf.estimator.ModeKeys.PREDICT:
         return tf.estimator.EstimatorSpec(mode=mode, predictions=predictions)
 
-    # Calculate Loss (for both TRAIN and EVAL modes).
+    # Calculate loss and accuracy (for both TRAIN and EVAL modes).
     loss = tf.losses.sparse_softmax_cross_entropy(labels=labels, logits=logits)
 
     # Configure the Training Op (for TRAIN mode).
     if mode == tf.estimator.ModeKeys.TRAIN:
-        optimizer = tf.train.GradientDescentOptimizer(learning_rate=0.001)
+        optimizer = tf.train.GradientDescentOptimizer(learning_rate=LEARNING_RATE)
         train_op = optimizer.minimize(
             loss=loss,
             global_step=tf.train.get_global_step())
+        tf.summary.scalar('Training_Loss', loss)
         return tf.estimator.EstimatorSpec(mode=mode, loss=loss, train_op=train_op)
 
     # Add evaluation metrics (for EVAL mode).
-    eval_metric_ops = {
-        'accuracy': tf.metrics.accuracy(
-            labels=labels, predictions=predictions['classes'])}
+    accuracy = tf.metrics.accuracy(labels=labels, predictions=predictions['classes'])
+    confusion = tf.confusion_matrix(labels, predictions['classes'])
+    eval_metric_ops = {'accuracy': accuracy}
+    tf.summary.scalar('Testing_Loss', loss)
+    tf.summary.scalar('Testing_Accuracy', accuracy)
+    tf.summary.tensor_summary('Confusion_Matrix', confusion)
     return tf.estimator.EstimatorSpec(
         mode=mode, loss=loss, eval_metric_ops=eval_metric_ops)
 
@@ -111,24 +138,24 @@ def main(argv):
     for example_number in range(len(boards)):
         for board_position in range(len(boards[example_number])):
             flat_value = np.where(boards[example_number][board_position] == 1)[0][0]
+            # Get one-hot indices more analogous to an image. 
+            if MODIFY_ONE_HOT_INDICES:
+                flat_value = convert_index_value(flat_value)
             boards_flat[example_number][board_position] = flat_value
     labels_flat = np.zeros((labels.shape[0]), dtype=np.int32)
     for example_number in range(len(labels)):
         flat_value = np.where(labels[example_number] == 1)[0][0]
         labels_flat[example_number] = flat_value
-
     split_index = int(len(boards) * TRAINING_SPLIT)
     boards_train = boards_flat[:split_index]
     labels_train = labels_flat[:split_index]
     boards_eval = boards_flat[split_index:]
     labels_eval = labels_flat[split_index:]
     # Create the Estimator.
-    mnist_classifier = tf.estimator.Estimator(model_fn=cnn_model_fn, model_dir='/tmp/mnist_convnet_model')
-    # Set up logging for predictions.
-    # Log the values in the 'Softmax' tensor with label 'probabilities'.
-    tensors_to_log = {'probabilities': 'softmax_tensor'}
-    logging_hook = tf.train.LoggingTensorHook(
-        tensors=tensors_to_log, every_n_iter=50)
+    mnist_classifier = tf.estimator.Estimator(model_fn=cnn_model_fn, model_dir=DEFAULT_MODEL_DIR)
+    # Set up logging to STDERR.
+    tensors_to_log = {}
+    logging_hook = tf.train.LoggingTensorHook(tensors=tensors_to_log, every_n_iter=LOG_EVERY_N_ITER)
     # Train the model.
     train_input_fn = tf.estimator.inputs.numpy_input_fn(
         x={'x': boards_train},
@@ -138,18 +165,22 @@ def main(argv):
         shuffle=True)
     mnist_classifier.train(
         input_fn=train_input_fn,
-        hooks=[logging_hook])
+        hooks=None if not tensors_to_log else [logging_hook])
     # Evaluate the model and print results.
-    eval_input_fn = tf.estimator.inputs.numpy_input_fn(
+    eval_train_input_fn = tf.estimator.inputs.numpy_input_fn(
+        x={'x': boards_train},
+        y=labels_train,
+        num_epochs=1,
+        shuffle=False)
+    eval_train_results = mnist_classifier.evaluate(input_fn=eval_train_input_fn, name='Training Performance')
+    print('Training results: {0}'.format(eval_train_results))
+    eval_test_input_fn = tf.estimator.inputs.numpy_input_fn(
         x={'x': boards_eval},
         y=labels_eval,
         num_epochs=1,
         shuffle=False)
-    eval_results = mnist_classifier.evaluate(input_fn=eval_input_fn)
-    print(eval_results)
-
-    # TODO save model.
-
+    eval_test_results = mnist_classifier.evaluate(input_fn=eval_test_input_fn, name='Testing Performance')
+    print('Eval results: {0}'.format(eval_test_results))
     infile.close()
 
 
