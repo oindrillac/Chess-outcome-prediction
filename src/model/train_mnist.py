@@ -5,6 +5,8 @@ import argparse
 import h5py
 import numpy as np
 import tensorflow as tf
+from sklearn import metrics
+import matplotlib.pyplot as plt
 import sys
 
 sys.path.extend(['.', '..'])
@@ -18,8 +20,11 @@ DEFAULT_BATCH_SIZE = 100
 DEFAULT_NUM_EPOCHS = 5
 TRAINING_SPLIT = 0.8
 LEARNING_RATE = 0.001
+DROPOUT_RATE = 0.4
 # If True, this will change the one-hot index values to be more analogous to a pixel value.
 MODIFY_ONE_HOT_INDICES = True
+NUM_CLASSES = 2
+PIXEL_VALUE_SCALING_FACTOR = 255 / 12
 
 tf.logging.set_verbosity(tf.logging.INFO)
 
@@ -31,7 +36,7 @@ def convert_index_value(i):
     highest values furthest from center."""
     piece = build_dataset.ONE_HOT_INDICES[i]
     result_indices = ['K', 'Q', 'R', 'B', 'N', 'P', None, 'p', 'n', 'b', 'r', 'q', 'k']
-    return result_indices.index(piece)
+    return result_indices.index(piece) * PIXEL_VALUE_SCALING_FACTOR
 
 
 def cnn_model_fn(features, labels, mode):
@@ -80,7 +85,7 @@ def cnn_model_fn(features, labels, mode):
     tf.summary.histogram('Dense', dense)
     dropout = tf.layers.dropout(
         inputs=dense,
-        rate=0.4,
+        rate=DROPOUT_RATE,
         training=mode == tf.estimator.ModeKeys.TRAIN)
     tf.summary.histogram('Dropout', dropout)
 
@@ -146,7 +151,16 @@ def main(argv):
     for example_number in range(len(labels)):
         flat_value = np.where(labels[example_number] == 1)[0][0]
         labels_flat[example_number] = flat_value
-    split_index = int(len(boards) * TRAINING_SPLIT)
+    if NUM_CLASSES == 2:
+        boards_binary = []
+        labels_binary = []
+        for i in range(len(labels_flat)):
+            if labels_flat[i] == 0 or labels_flat[i] == 1:
+                boards_binary.append(boards_flat[i])
+                labels_binary.append(labels_flat[i])
+        boards_flat = np.asarray(boards_binary)
+        labels_flat = np.asarray(labels_binary)
+    split_index = int(len(boards_flat) * TRAINING_SPLIT)
     boards_train = boards_flat[:split_index]
     labels_train = labels_flat[:split_index]
     boards_eval = boards_flat[split_index:]
@@ -163,9 +177,7 @@ def main(argv):
         batch_size=batch_size,
         num_epochs=num_epochs,
         shuffle=True)
-    mnist_classifier.train(
-        input_fn=train_input_fn,
-        hooks=None if not tensors_to_log else [logging_hook])
+    mnist_classifier.train(input_fn=train_input_fn, hooks=None if not tensors_to_log else [logging_hook])
     # Evaluate the model and print results.
     eval_train_input_fn = tf.estimator.inputs.numpy_input_fn(
         x={'x': boards_train},
@@ -181,6 +193,65 @@ def main(argv):
         shuffle=False)
     eval_test_results = mnist_classifier.evaluate(input_fn=eval_test_input_fn, name='Testing Performance')
     print('Eval results: {0}'.format(eval_test_results))
+    # Run prediction on the test set.
+    predict_test_input_fn = tf.estimator.inputs.numpy_input_fn(
+        x={'x': boards_eval},
+        num_epochs=1,
+        shuffle=False)
+    predict_test_results = list(mnist_classifier.predict(predict_test_input_fn))
+    predicted_classes = [d['classes'] for d in predict_test_results]
+    if len(labels_eval) != len(predicted_classes):
+        raise ValueError('Predictions ({0}) and labels ({1}) are of different length.'.format(len(predicted_classes), len(labels_eval)))
+    for c in range(NUM_CLASSES):
+        print('Number of class {0} labels in the training dataset: {1}'.format(c, sum([1 if x == c else 0 for x in labels_train])))
+        print('Number of class {0} labels in the testing dataset: {1}'.format(c, sum([1 if x == c else 0 for x in labels_eval])))
+    if NUM_CLASSES == 2:
+        precision = metrics.precision_score(labels_eval, predicted_classes)
+        recall = metrics.recall_score(labels_eval, predicted_classes)
+        f1_score = metrics.f1_score(labels_eval, predicted_classes)
+        roc_auc = metrics.roc_auc_score(labels_eval, predicted_classes)
+        confusion = metrics.confusion_matrix(labels_eval, predicted_classes)
+        scores_eval = [d['probabilities'][1] for d in predict_test_results]
+        fpr, tpr, thresholds = metrics.roc_curve(labels_eval, scores_eval)
+        print('Precision: {0}'.format(precision))
+        print('Recall: {0}'.format(recall))
+        print('F1 Score: {0}'.format(f1_score))
+        print('ROC AUC: {0}'.format(roc_auc))
+        print('Confusion matrix:\n{0}'.format(confusion))
+
+        plt.figure()
+        plt.plot(fpr, tpr, color='darkorange', label='ROC Curve')
+        plt.plot([0, 1], [0, 1], color='navy', linestyle='--', label='Random Baseline')
+        plt.xlim([0.0, 1.0])
+        plt.ylim([0.0, 1.0])
+        plt.xlabel('False Positive Rate')
+        plt.ylabel('True Positive Rate')
+        plt.title('ROC Curve (0 = White Wins, 1 = Black Wins)')
+        plt.legend(loc="lower right")
+        plt.savefig('../../roc.png', format='png')
+        print('ROC Curve saved to ../../roc.png')
+        
+        precision, recall, thresholds = metrics.precision_recall_curve(labels_eval, scores_eval)
+        plt.figure()
+        plt.plot(recall, precision, color='darkorange', label='PR Curve')
+        plt.xlim([0.0, 1.0])
+        plt.ylim([0.0, 1.0])
+        plt.xlabel('Recall')
+        plt.ylabel('Precision')
+        plt.title('PR Curve (0 = White Wins, 1 = Black Wins)')
+        plt.legend(loc="lower left")
+        plt.savefig('../../pr.png', format='png')
+        print('PR Curve saved to ../../pr.png')
+    else:
+        precision = metrics.precision_score(labels_eval, predicted_classes, average='weighted')
+        recall = metrics.recall_score(labels_eval, predicted_classes, average='weighted')
+        f1_score = metrics.f1_score(labels_eval, predicted_classes, average='weighted')
+        confusion = metrics.confusion_matrix(labels_eval, predicted_classes)
+        print('Precision: {0}'.format(precision))
+        print('Recall: {0}'.format(recall))
+        print('F1 Score: {0}'.format(f1_score))
+        print('Confusion matrix:\n{0}'.format(confusion))
+
     infile.close()
 
 

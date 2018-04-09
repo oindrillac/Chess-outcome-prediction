@@ -33,6 +33,11 @@ train:
 	python model/train_model.py $(model_type) $(board_dataset_output_filename) $(trained_model_output_filename) -b $(batch_size) -e $(num_epochs)
 
 
+tensorboard:
+	@echo "Launching tensorboard on port 6006. Navigate to http://localhost:6006 to view."
+	tensorboard --logdir=$(trained_model_output_dir)
+
+
 run:
 	@echo "Testing the model."
 	#python model/model.py
