@@ -21,6 +21,9 @@ help:
 	@echo "make train"
 	@echo "(optional during/after training) make tensorboard"
 	@echo "(subsequent runs or during training) make run"
+	@echo ""
+	@echo "If you change any hyperparameters, change the trained_model_output_dir variable or run:"
+	@echo "make clean"
 	@echo "================================================================================"
 
 
