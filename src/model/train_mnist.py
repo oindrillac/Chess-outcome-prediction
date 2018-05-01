@@ -1,6 +1,7 @@
 """This model is based on the TensorFlow MNIST example. The underlying
 assumption of this model is that we can treat the input boards like
 images."""
+from __future__ import print_function
 import argparse
 import h5py
 import numpy as np
@@ -25,8 +26,30 @@ DROPOUT_RATE = 0.4
 MODIFY_ONE_HOT_INDICES = True
 NUM_CLASSES = 2
 PIXEL_VALUE_SCALING_FACTOR = 255 / 12
+EVAL_ON_SAME_MATERIAL_BOARDS = True
+# This will raise an error if it is bigger than batch size.
+NUM_BOARDS_TO_ANALYZE = 100
 
 tf.logging.set_verbosity(tf.logging.INFO)
+
+
+def print_board(board):
+    '''Prints the given board in a readble format. The board is in the
+    following format: a length 64 list where each index is in [-6, 6]
+    and the mapping of each value is:
+    ['K', 'Q', 'R', 'B', 'N', 'P', None, 'p', 'n', 'b', 'r', 'q', 'k']'''
+    if len(board) != build_dataset.BOARD_ROWS * build_dataset.BOARD_COLS:
+        raise ValueError('Length of board ({0}) does not match expected size ({1}).'.format(len(board), build_dataset.BOARD_ROWS * build_dataset.BOARD_COLS))
+    result_indices = ['K', 'Q', 'R', 'B', 'N', 'P', None, 'p', 'n', 'b', 'r', 'q', 'k']
+    for r in range(build_dataset.BOARD_ROWS):
+        for c in range(build_dataset.BOARD_COLS):
+            index_value = int((board[r * build_dataset.BOARD_COLS + c] + 1) / PIXEL_VALUE_SCALING_FACTOR)
+            piece = result_indices[index_value]
+            if piece:
+                print(piece, end='')
+            else:
+                print('-', end='')
+        print()
 
 
 def convert_index_value(i):
@@ -44,10 +67,10 @@ def cnn_model_fn(features, labels, mode):
     # Convert 13 dimensional one-hot vector into a flat value (just use the index as "pixel" value). Then we can go directly off the example.
     features_flat = features['x']
     # Input Layer.
-    # Input is batch_size x 8 x 8 x 1, where each element is in [0, 12].
+    # Input is batch_size x 8 x 8 x 1, where each element is in [0, 255].
     input_layer = tf.reshape(features_flat, [-1, build_dataset.BOARD_ROWS, build_dataset.BOARD_COLS, 1])
-    tf.summary.image('First_Boards_In_Batch', input_layer, 10)
-
+    tf.summary.image('First_Boards_In_Batch', input_layer, NUM_BOARDS_TO_ANALYZE)
+    
     # Convolutional Layer #1.
     # Output is batch_size x 8 x 8 x 32.
     conv1 = tf.layers.conv2d(
@@ -91,7 +114,7 @@ def cnn_model_fn(features, labels, mode):
 
     # Logits Layer.
     # Output is batch_size x 3.
-    logits = tf.layers.dense(inputs=dropout, units=3)
+    logits = tf.layers.dense(inputs=dropout, units=NUM_CLASSES)
 
     predictions = {
         # Generate predictions (for PREDICT and EVAL mode).
@@ -128,12 +151,13 @@ def cnn_model_fn(features, labels, mode):
 
 def main(argv):
     """Trains the model using the given argv."""
-    if len(argv) != 5:
-        raise ValueError('Expected 5 arguments; got {0}.'.format(len(argv)))
+    if len(argv) != 6:
+        raise ValueError('Expected 6 arguments; got {0}.'.format(len(argv)))
     dataset_filename = argv[1]
     output_filename = argv[2]
-    batch_size = DEFAULT_BATCH_SIZE if not argv[3] else int(argv[3])
-    num_epochs = DEFAULT_NUM_EPOCHS if not argv[4] else int(argv[4])
+    model_output_dir = argv[3]
+    batch_size = DEFAULT_BATCH_SIZE if not argv[4] else int(argv[4])
+    num_epochs = DEFAULT_NUM_EPOCHS if not argv[5] else int(argv[5])
     # Load training and eval data.
     infile = h5py.File(dataset_filename, 'r')
     boards = np.asarray(infile[build_dataset.DEFAULT_BOARD_DATASET_NAME])
@@ -165,8 +189,27 @@ def main(argv):
     labels_train = labels_flat[:split_index]
     boards_eval = boards_flat[split_index:]
     labels_eval = labels_flat[split_index:]
+    if EVAL_ON_SAME_MATERIAL_BOARDS:
+        print('Evaluating on boards with the same material value.')
+        piece_values = [0, -8, -5, -3, -3, -1, 0, 1, 3, 3, 5, 8, 0]
+        new_boards_eval = []
+        new_labels_eval = []
+        for i in range(len(boards_eval)):
+            board_values = []
+            for j in range(len(boards_eval[i])):
+                # Map black to negative values.
+                # Map white to positive values.
+                index_value = int((boards_eval[i][j] + 1) / PIXEL_VALUE_SCALING_FACTOR)
+                board_values.append(piece_values[index_value])
+            if sum(board_values) == 0:
+                new_boards_eval.append(boards_eval[i])
+                new_labels_eval.append(labels_eval[i])
+        print('Number of eval boards before: {0}'.format(len(boards_eval)))
+        boards_eval = np.array(new_boards_eval)
+        labels_eval = np.array(new_labels_eval)
+        print('Number of eval boards after: {0}'.format(len(new_boards_eval)))
     # Create the Estimator.
-    mnist_classifier = tf.estimator.Estimator(model_fn=cnn_model_fn, model_dir=DEFAULT_MODEL_DIR)
+    mnist_classifier = tf.estimator.Estimator(model_fn=cnn_model_fn, model_dir=model_output_dir)
     # Set up logging to STDERR.
     tensors_to_log = {}
     logging_hook = tf.train.LoggingTensorHook(tensors=tensors_to_log, every_n_iter=LOG_EVERY_N_ITER)
@@ -200,6 +243,10 @@ def main(argv):
         shuffle=False)
     predict_test_results = list(mnist_classifier.predict(predict_test_input_fn))
     predicted_classes = [d['classes'] for d in predict_test_results]
+    probabilities = [d['probabilities'] for d in predict_test_results]
+    for i in range(len(predicted_classes) - NUM_BOARDS_TO_ANALYZE, len(predicted_classes)):
+        print('Board {0}: class = {1}, probability = {2}'.format(i, predicted_classes[i], probabilities[i]))
+        print_board(boards_eval[i])
     if len(labels_eval) != len(predicted_classes):
         raise ValueError('Predictions ({0}) and labels ({1}) are of different length.'.format(len(predicted_classes), len(labels_eval)))
     for c in range(NUM_CLASSES):
@@ -228,8 +275,8 @@ def main(argv):
         plt.ylabel('True Positive Rate')
         plt.title('ROC Curve (0 = White Wins, 1 = Black Wins)')
         plt.legend(loc="lower right")
-        plt.savefig('../../roc.png', format='png')
-        print('ROC Curve saved to ../../roc.png')
+        plt.savefig('{0}roc.png'.format(model_output_dir), format='png')
+        print('ROC Curve saved to {0}roc.png'.format(model_output_dir))
         
         precision, recall, thresholds = metrics.precision_recall_curve(labels_eval, scores_eval)
         plt.figure()
@@ -240,8 +287,8 @@ def main(argv):
         plt.ylabel('Precision')
         plt.title('PR Curve (0 = White Wins, 1 = Black Wins)')
         plt.legend(loc="lower left")
-        plt.savefig('../../pr.png', format='png')
-        print('PR Curve saved to ../../pr.png')
+        plt.savefig('{0}pr.png'.format(model_output_dir), format='png')
+        print('PR Curve saved to {0}pr.png'.format(model_output_dir))
     else:
         precision = metrics.precision_score(labels_eval, predicted_classes, average='weighted')
         recall = metrics.recall_score(labels_eval, predicted_classes, average='weighted')
@@ -255,12 +302,12 @@ def main(argv):
     infile.close()
 
 
-def train_model(dataset_filename, output_filename, batch_size='', num_epochs=''):
+def train_model(dataset_filename, output_filename, model_output_dir, batch_size='', num_epochs=''):
     """Trains a model using the given dataset and saves it to the
     output file."""
-    tf.app.run(main=main, argv=[sys.argv[0]] + [dataset_filename, output_filename, batch_size, num_epochs])
+    tf.app.run(main=main, argv=[sys.argv[0]] + [dataset_filename, output_filename, model_output_dir, batch_size, num_epochs])
 
 
 if __name__ == '__main__':
-    print 'Train this model by running the train_model.py script with the appropriate arguments.'
+    print('Train this model by running the train_model.py script with the appropriate arguments.')
 

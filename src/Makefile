@@ -4,10 +4,10 @@ max_num_boards = 601253
 num_input_boards = $(max_num_boards)
 model_type = 0
 batch_size = 100
-num_epochs = 1
+num_epochs = 100
 board_dataset_output_filename = ../../boards_$(num_input_boards)in.hdf5
 trained_model_output_filename = ../trained/model_$(num_input_boards)in.hdf5
-trained_model_output_dir = /tmp/mnist_convnet_model/
+trained_model_output_dir = /tmp/mnist_convnet_model_100epochs_v3/
 
 
 all: help run
@@ -30,7 +30,7 @@ dataset:
 train:
 	@echo "Training a model on the dataset from $(board_dataset_output_filename) and saving to $(trained_model_output_filename)"
 	@echo "Make sure that you have adjusted the hyperparameters to your satisfaction."
-	python model/train_model.py $(model_type) $(board_dataset_output_filename) $(trained_model_output_filename) -b $(batch_size) -e $(num_epochs)
+	python model/train_model.py $(model_type) $(board_dataset_output_filename) $(trained_model_output_filename) $(trained_model_output_dir) -b $(batch_size) -e $(num_epochs)
 
 
 tensorboard:
