@@ -21,7 +21,8 @@ This is a binary (or ternary, if counting stalemates) classification problem. So
 This model treats the boards as image data and runs them through a convolutional neural network. To run the CNN, issue the following commands:
 
 * make dataset (do this only once)
-* make tensorboard
-* make train
+* make tensorboard (before, during, or after training)
+* make train (will run against the test set at the end)
+* make run (for subsequent runs or evaluation during training)
 
-Each time you run the training script, it will load the old model and continue training from wherever you left off. So, if you change any hyperparameters, you need to run "make clean". Performance metrics will be available on tensorboard and in the console output.
+Each time you run the training script, it will load the old model and continue training from wherever you left off. So, if you change any hyperparameters, you need to run **make clean**. Performance metrics will be available on tensorboard and in the console output.
