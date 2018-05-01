@@ -16,9 +16,11 @@ all: help run
 help:
 	@echo "================================================================================"
 	@echo "By default, make will NOT create the datasets necessary for training. This is because it is a long, slow process that should only be done once."
-	@echo ""
-	@echo "TODO: talk about final parameter/hyperparameter selection as appropriate."
-	@echo ""
+	@echo "To build the dataset, train the model, and run the trained model, execute the following commands:"
+	@echo "make dataset"
+	@echo "make train"
+	@echo "(optional during/after training) make tensorboard"
+	@echo "(subsequent runs or during training) make run"
 	@echo "================================================================================"
 
 
@@ -40,7 +42,7 @@ tensorboard:
 
 run:
 	@echo "Testing the model."
-	#python model/model.py
+	python model/model.py $(model_type) $(board_dataset_output_filename) $(trained_model_output_dir)
 
 
 clean:

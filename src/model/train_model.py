@@ -14,7 +14,7 @@ def train_model(model_num, dataset_filename, output_filename, model_directory, b
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Runs the model.')
+    parser = argparse.ArgumentParser(description='Trains the model.')
     parser.add_argument('model_num', metavar='m', type=int,
         help='Defines the type of model to train. Each type solves the problem using its own approach.')
     parser.add_argument('dataset_filename', metavar='d', type=str,
