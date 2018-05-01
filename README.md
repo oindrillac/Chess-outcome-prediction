@@ -16,3 +16,12 @@ https://www.kaggle.com/datasnaek/chess
 This is a binary (or ternary, if counting stalemates) classification problem. Solving this problem will tell us more about the value of pieces and of superior tactical positioning. We are not attempting to design a new, robust algorithm to play chess. We plan to solve this problem using multilayer perceptron networks and other classification techniques. Again, the goal is not to predict the best move, but to predict whether white or black (or neither) will win the game.
 	
 
+## CNN Model (MNIST Model)
+
+This model treats the boards as image data and runs them through a convolutional neural network. To run the CNN, issue the following commands:
+
+* make dataset (do this only once)
+* make tensorboard
+* make train
+
+Each time you run the training script, it will load the old model and continue training from wherever you left off. So, if you change any hyperparameters, you need to run "make clean". Performance metrics will be available on tensorboard and in the console output.
