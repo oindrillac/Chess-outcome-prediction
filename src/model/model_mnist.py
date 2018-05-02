@@ -102,7 +102,7 @@ def main(argv):
     predicted_classes = [d['classes'] for d in predict_test_results]
     probabilities = [d['probabilities'] for d in predict_test_results]
     for i in range(len(predicted_classes) - train_mnist.NUM_BOARDS_TO_ANALYZE, len(predicted_classes)):
-        print('Board {0}: class = {1}, probability = {2}'.format(i, predicted_classes[i], probabilities[i]))
+        print('Board {0}: label = {1}, prediction = {2}, probability = {3}'.format(i, labels_eval[i], predicted_classes[i], probabilities[i]))
         train_mnist.print_board(boards_eval[i])
     if len(labels_eval) != len(predicted_classes):
         raise ValueError('Predictions ({0}) and labels ({1}) are of different length.'.format(len(predicted_classes), len(labels_eval)))
