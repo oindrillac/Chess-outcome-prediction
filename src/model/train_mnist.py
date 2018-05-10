@@ -34,10 +34,10 @@ tf.logging.set_verbosity(tf.logging.INFO)
 
 
 def print_board(board):
-    '''Prints the given board in a readble format. The board is in the
+    """Prints the given board in a readble format. The board is in the
     following format: a length 64 list where each index is in [-6, 6]
     and the mapping of each value is:
-    ['K', 'Q', 'R', 'B', 'N', 'P', None, 'p', 'n', 'b', 'r', 'q', 'k']'''
+    ['K', 'Q', 'R', 'B', 'N', 'P', None, 'p', 'n', 'b', 'r', 'q', 'k']"""
     if len(board) != build_dataset.BOARD_ROWS * build_dataset.BOARD_COLS:
         raise ValueError('Length of board ({0}) does not match expected size ({1}).'.format(len(board), build_dataset.BOARD_ROWS * build_dataset.BOARD_COLS))
     result_indices = ['K', 'Q', 'R', 'B', 'N', 'P', None, 'p', 'n', 'b', 'r', 'q', 'k']
@@ -50,6 +50,46 @@ def print_board(board):
             else:
                 print('-', end='')
         print()
+
+
+def get_average_distance_from_center(board, piece):
+    """Returns the average L2 distance from the piece to the center of
+    the board. Return -1 if no such piece exists."""
+    if len(board) != build_dataset.BOARD_ROWS * build_dataset.BOARD_COLS:
+        raise ValueError('Length of board ({0}) does not match expected size ({1}).'.format(len(board), build_dataset.BOARD_ROWS * build_dataset.BOARD_COLS))
+    result_indices = ['K', 'Q', 'R', 'B', 'N', 'P', None, 'p', 'n', 'b', 'r', 'q', 'k']
+    distances = []
+    for r in range(build_dataset.BOARD_ROWS):
+        for c in range(build_dataset.BOARD_COLS):
+            index_value = int((board[r * build_dataset.BOARD_COLS + c] + 1) / PIXEL_VALUE_SCALING_FACTOR)
+            piece_at_index = result_indices[index_value]
+            if piece == piece_at_index:
+                distances.append((r - (build_dataset.BOARD_ROWS - 1.0) / 2.0) ** 2 + (c - (build_dataset.BOARD_COLS - 1.0) / 2.0) ** 2)
+    if distances:
+        return sum(distances) / len(distances)
+    return -1
+
+
+def get_weighted_average_distance_from_center(board, player, weight=True):
+    """Returns the average L2 distance from the all the player's pieces
+    to the center of the board. If weight is True, weights this average
+    according to piece value."""
+    if len(board) != build_dataset.BOARD_ROWS * build_dataset.BOARD_COLS:
+        raise ValueError('Length of board ({0}) does not match expected size ({1}).'.format(len(board), build_dataset.BOARD_ROWS * build_dataset.BOARD_COLS))
+    result_indices = ['K', 'Q', 'R', 'B', 'N', 'P', None, 'p', 'n', 'b', 'r', 'q', 'k']
+    piece_values = {'K': 0, 'Q': 8, 'R': 5, 'B': 3, 'N': 3, 'P': 1}
+    if not weight:
+        piece_values = {'K': 1, 'Q': 1, 'R': 1, 'B': 1, 'N': 1, 'P': 1}
+    distances = []
+    for r in range(build_dataset.BOARD_ROWS):
+        for c in range(build_dataset.BOARD_COLS):
+            index_value = int((board[r * build_dataset.BOARD_COLS + c] + 1) / PIXEL_VALUE_SCALING_FACTOR)
+            piece_at_index = result_indices[index_value]
+            if piece_at_index and ((player == 0 and piece_at_index.islower()) or (player == 1 and piece_at_index.isupper())):
+                distances.append(piece_values[piece_at_index.upper()] * ((r - (build_dataset.BOARD_ROWS - 1.0) / 2.0) ** 2 + (c - (build_dataset.BOARD_COLS - 1.0) / 2.0) ** 2))
+    if distances:
+        return sum(distances) / len(distances)
+    return -1
 
 
 def convert_index_value(i):

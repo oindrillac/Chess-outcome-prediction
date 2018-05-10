@@ -146,6 +146,82 @@ def main(argv):
         plt.legend(loc="lower left")
         plt.savefig('{0}pr.png'.format(model_output_dir), format='png')
         print('PR Curve saved to {0}pr.png'.format(model_output_dir))
+        
+        N = 1000
+        for piece in ['K', 'Q', 'R', 'B', 'N', 'P']:
+            distance = []
+            probability_of_victory = []
+            game_indices = np.random.choice(range(len(boards_eval)), N, replace=False)
+            for i in game_indices:
+                d0 = train_mnist.get_average_distance_from_center(boards_eval[i], piece)
+                if d0 >= 0:
+                    distance.append(d0)
+                    probability_of_victory.append(probabilities[i][0])
+                d1 = train_mnist.get_average_distance_from_center(boards_eval[i], piece.lower())
+                if d1 >= 0:
+                    distance.append(d1)
+                    probability_of_victory.append(probabilities[i][1])
+            plt.figure()
+            plt.scatter(distance, probability_of_victory, s=4)
+            plt.xlim([0.0, 25.0])
+            plt.ylim([0.0, 1.0])
+            plt.xlabel('{0}\'s Average Distance from Center'.format(piece))
+            plt.ylabel('Probability of Victory')
+            plt.title('{0}\'s Position Versus Probability of Victory'.format(piece))
+            plt.savefig('{0}{1}_dist.png'.format(model_output_dir, piece), format='png')
+            print('{1} Distance Plot saved to {0}{1}_dist.png'.format(model_output_dir, piece))
+        distance = []
+        probability_of_victory = []
+        game_indices = np.random.choice(range(len(boards_eval)), N, replace=False)
+        for i in game_indices:
+            d0 = train_mnist.get_average_distance_from_center(boards_eval[i], None)
+            distance.append(d0)
+            probability_of_victory.append(probabilities[i][0])
+        plt.figure()
+        plt.scatter(distance, probability_of_victory, s=4)
+        plt.xlim([0.0, 25.0])
+        plt.ylim([0.0, 1.0])
+        plt.xlabel('Empty\'s Average Distance from Center')
+        plt.ylabel('Probability of Black Victory')
+        plt.title('Empty\'s Position Versus Probability of Victory')
+        plt.savefig('{0}Empty_dist.png'.format(model_output_dir), format='png')
+        print('Empty Distance Plot saved to {0}Empty_dist.png'.format(model_output_dir))
+        distance = []
+        probability_of_victory = []
+        game_indices = np.random.choice(range(len(boards_eval)), N, replace=False)
+        for i in game_indices:
+            d0 = train_mnist.get_weighted_average_distance_from_center(boards_eval[i], 0)
+            distance.append(d0)
+            probability_of_victory.append(probabilities[i][0])
+            d1 = train_mnist.get_weighted_average_distance_from_center(boards_eval[i], 1)
+            distance.append(d1)
+            probability_of_victory.append(probabilities[i][1])
+        plt.figure()
+        plt.scatter(distance, probability_of_victory, s=4)
+        plt.ylim([0.0, 1.0])
+        plt.xlabel('Weighted Average Distance from Center')
+        plt.ylabel('Probability of Victory')
+        plt.title('Weighted Position Versus Probability of Victory')
+        plt.savefig('{0}weighted_dist.png'.format(model_output_dir), format='png')
+        print('Weighted Distance Plot saved to {0}weighted_dist.png'.format(model_output_dir))
+        distance = []
+        probability_of_victory = []
+        game_indices = np.random.choice(range(len(boards_eval)), N, replace=False)
+        for i in game_indices:
+            d0 = train_mnist.get_weighted_average_distance_from_center(boards_eval[i], 0, weight=False)
+            distance.append(d0)
+            probability_of_victory.append(probabilities[i][0])
+            d1 = train_mnist.get_weighted_average_distance_from_center(boards_eval[i], 1, weight=False)
+            distance.append(d1)
+            probability_of_victory.append(probabilities[i][1])
+        plt.figure()
+        plt.scatter(distance, probability_of_victory, s=4)
+        plt.ylim([0.0, 1.0])
+        plt.xlabel('Unweighted Average Distance from Center')
+        plt.ylabel('Probability of Victory')
+        plt.title('Unweighted Position Versus Probability of Victory')
+        plt.savefig('{0}unweighted_dist.png'.format(model_output_dir), format='png')
+        print('Unweighted Distance Plot saved to {0}unweighted_dist.png'.format(model_output_dir))
     else:
         precision = metrics.precision_score(labels_eval, predicted_classes, average='weighted')
         recall = metrics.recall_score(labels_eval, predicted_classes, average='weighted')
@@ -155,7 +231,6 @@ def main(argv):
         print('Recall: {0}'.format(recall))
         print('F1 Score: {0}'.format(f1_score))
         print('Confusion matrix:\n{0}'.format(confusion))
-
     infile.close()
 
 
